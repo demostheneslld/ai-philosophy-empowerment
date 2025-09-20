@@ -5,14 +5,26 @@ from __future__ import annotations
 
 import re
 import shutil
+import sys
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from html import escape
 from pathlib import Path
 from typing import Dict, List
 
-ROOT = Path(__file__).resolve().parent.parent
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+ROOT = SCRIPT_DIR.parent
 CONTENT_DIR = ROOT / "content"
 OUTPUT_DIR = ROOT / "docs"
+RESOURCES_DIR = SCRIPT_DIR / "resources"
+
+try:
+    from config import SITE_BASE_URL, REPO_URL
+except ImportError as exc:
+    raise RuntimeError("Missing scripts/config.py") from exc
 
 
 @dataclass(order=True)
@@ -35,7 +47,10 @@ class Page:
 
 
 def main() -> None:
-    pages = [build_page(path) for path in sorted(CONTENT_DIR.rglob("*.md"))]
+    pages = [
+        build_page(path)
+        for path in sorted(CONTENT_DIR.rglob("*.md"))
+    ]
 
     if OUTPUT_DIR.exists():
         shutil.rmtree(OUTPUT_DIR)
@@ -61,6 +76,10 @@ def main() -> None:
     index_html = render_index(grouped)
     (OUTPUT_DIR / "index.html").write_text(index_html, encoding="utf-8")
     (OUTPUT_DIR / ".nojekyll").write_text("", encoding="utf-8")
+
+    copy_resources()
+    write_sitemap(pages)
+    write_llms_txt()
 
     print(f"Generated {len(pages)} pages into {OUTPUT_DIR.relative_to(ROOT)}")
 
@@ -93,7 +112,6 @@ def parse_front_matter(text: str) -> tuple[Dict[str, str], str]:
         return {}, text
 
     metadata: Dict[str, str] = {}
-    body_lines: List[str] = []
     fm_lines: List[str] = []
     closing_index = None
 
@@ -161,7 +179,7 @@ def markdown_to_html(markdown_text: str) -> str:
             close_lists()
             continue
 
-        heading_match = re.match(r"^(#{1,6})\\s+(.*)", stripped)
+        heading_match = re.match(r"^(#{1,6})\s+(.*)", stripped)
         if heading_match:
             flush_paragraph()
             close_lists()
@@ -170,7 +188,7 @@ def markdown_to_html(markdown_text: str) -> str:
             html_parts.append(f"<h{level}>{process_inline(content)}</h{level}>")
             continue
 
-        ul_match = re.match(r"^[-*]\\s+(.*)", stripped)
+        ul_match = re.match(r"^[-*]\s+(.*)", stripped)
         if ul_match:
             flush_paragraph()
             if in_ol:
@@ -182,7 +200,7 @@ def markdown_to_html(markdown_text: str) -> str:
             html_parts.append(f"<li>{process_inline(ul_match.group(1).strip())}</li>")
             continue
 
-        ol_match = re.match(r"^\d+\\.\\s+(.*)", stripped)
+        ol_match = re.match(r"^\d+\.\s+(.*)", stripped)
         if ol_match:
             flush_paragraph()
             if in_ul:
@@ -230,16 +248,12 @@ def process_inline(text: str) -> str:
                 continue
         if text.startswith("[", i):
             end_label = text.find("]", i + 1)
-            if (
-                end_label != -1
-                and end_label + 1 < length
-                and text[end_label + 1] == "("
-            ):
+            if end_label != -1 and end_label + 1 < length and text[end_label + 1] == "(":
                 end_url = text.find(")", end_label + 2)
                 if end_url != -1:
                     label = process_inline(text[i + 1 : end_label])
                     url = escape(text[end_label + 2 : end_url].strip())
-                    result.append(f'<a href="{url}">{label}</a>')
+                    result.append(f"<a href=\"{url}\">{label}</a>")
                     i = end_url + 1
                     continue
         result.append(escape(text[i]))
@@ -248,55 +262,28 @@ def process_inline(text: str) -> str:
 
 
 def render_page(*, title: str, description: str, body: str) -> str:
-    nav = '<nav><a href="index.html">Home</a></nav>'
-    meta_description = (
-        escape(description) if description else "The Empowerment Economy manifesto."
-    )
+    meta_description = escape(description) if description else "The Empowerment Economy manifesto."
+    nav = '<nav><a href="index.html">Home</a><a href="sitemap.xml">Sitemap</a><a href="llms.txt">LLMs</a></nav>'
     return f"""<!doctype html>
 <html lang=\"en\">
 <head>
   <meta charset=\"utf-8\">
   <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
-  <title>{escape(title)} · The Empowerment Economy</title>
   <meta name=\"description\" content=\"{meta_description}\">
-  <style>
-    body {{
-      background: #fff;
-      color: #000;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      margin: 3rem auto;
-      padding: 0 1.5rem;
-      max-width: 70ch;
-      line-height: 1.6;
-    }}
-    nav {{
-      margin-bottom: 2rem;
-    }}
-    nav a {{
-      color: inherit;
-      text-decoration: none;
-      font-weight: bold;
-    }}
-    nav a:hover {{
-      text-decoration: underline;
-    }}
-    pre {{
-      background: #f7f7f7;
-      padding: 1rem;
-      overflow-x: auto;
-    }}
-    code {{
-      font-family: ui-monospace, SFMono-Regular, SFMono, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-    }}
-  </style>
+  <meta name=\"theme-color\" content=\"#1f2933\">
+  <title>{escape(title)} · The Empowerment Economy</title>
+  <link rel=\"icon\" type=\"image/svg+xml\" href=\"favicon.svg\">
+  <link rel=\"stylesheet\" href=\"style.css\">
 </head>
 <body>
-  {nav}
+  <header>
+    {nav}
+  </header>
   <main>
     {body}
   </main>
   <footer>
-    <p>This site is part of <a href=\"https://github.com/demostheneslld/ai-philosophy-empowerment\">The Empowerment Economy project</a>, shared under an open licence.</p>
+    <p>This site is part of <a href=\"{REPO_URL}\">The Empowerment Economy project</a>, shared under an open licence.</p>
   </footer>
 </body>
 </html>"""
@@ -308,28 +295,56 @@ def render_index(grouped: Dict[str, List[Page]]) -> str:
         "<p>A community-managed manifesto, philosophy, and policy playbook for the AI age.</p>",
     ]
 
-    for category, pages in sorted(
-        grouped.items(),
-        key=lambda item: (item[1][0].order if item[1] else 0, item[0].lower()),
-    ):
+    for category, pages in sorted(grouped.items(), key=lambda item: (item[1][0].order if item[1] else 0, item[0].lower())):
         anchor = slugify(Path(category))
-        sections.append(f'<section id="{anchor}">')
+        sections.append(f"<section id=\"{anchor}\">")
         sections.append(f"  <h2>{escape(category)}</h2>")
         sections.append("  <ul>")
         for page in pages:
             description = f" — {escape(page.description)}" if page.description else ""
-            sections.append(
-                f'    <li><a href="{page.url}">{escape(page.title)}</a>{description}</li>'
-            )
+            sections.append(f"    <li><a href=\"{page.url}\">{escape(page.title)}</a>{description}</li>")
         sections.append("  </ul>")
         sections.append("</section>")
 
     body = "\n".join(sections)
-    return render_page(
-        title="The Empowerment Economy",
-        description="A manifesto and policy guide for AI-enabled empowerment.",
-        body=body,
+    return render_page(title="The Empowerment Economy", description="A manifesto and policy guide for AI-enabled empowerment.", body=body)
+
+
+def copy_resources() -> None:
+    if not RESOURCES_DIR.exists():
+        return
+    for resource in RESOURCES_DIR.rglob("*"):
+        if resource.is_dir():
+            continue
+        target = OUTPUT_DIR / resource.name
+        shutil.copy2(resource, target)
+
+
+def write_sitemap(pages: List[Page]) -> None:
+    today = datetime.now(timezone.utc).date().isoformat()
+    urls = [f"{SITE_BASE_URL}/{page.url}" for page in pages]
+    urls.insert(0, f"{SITE_BASE_URL}/index.html")
+
+    entries = "\n".join(
+        f"  <url>\n    <loc>{escape(url)}</loc>\n    <lastmod>{today}</lastmod>\n    <changefreq>weekly</changefreq>\n  </url>"
+        for url in urls
     )
+    sitemap = f"""<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">
+{entries}
+</urlset>
+"""
+    (OUTPUT_DIR / "sitemap.xml").write_text(sitemap, encoding="utf-8")
+
+
+def write_llms_txt() -> None:
+    policy = f"""# The Empowerment Economy — LLM usage policy
+Allow: /
+Purpose: Document and debate the Empowerment Economy manifesto.
+Attribution: credit the project and link back to {SITE_BASE_URL}/.
+Contact: open an issue on GitHub for questions or permissions.
+"""
+    (OUTPUT_DIR / "llms.txt").write_text(policy, encoding="utf-8")
 
 
 if __name__ == "__main__":

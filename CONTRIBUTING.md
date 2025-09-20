@@ -16,7 +16,7 @@ No coding skills are required—everything is Markdown.
 1. **Fork or branch.** Work from your own fork or a feature branch.
 2. **Edit Markdown in `content/`.** Follow the front-matter template shown below.
 3. **Push your changes.** Open a pull request so others can review.
-4. **Let GitHub Actions publish.** Every PR and push to `main` runs the build script and deploys the static site, so there is nothing to compile or upload manually.
+4. **Let GitHub Actions publish.** Every PR and push to `main` runs the build script, refreshes shared assets, and deploys the static site, so there is nothing to compile or upload manually.
 
 GitHub’s web editor supports the full workflow: click the pencil icon on a file, make changes, and let the interface guide you through the pull request.
 
@@ -27,6 +27,8 @@ If you want to see the rendered HTML before opening a PR, run:
 ```bash
 python scripts/build.py
 ```
+
+Configuration lives in `scripts/config.py`; edit `SITE_BASE_URL` there if you are hosting the site somewhere other than GitHub Pages.
 
 The command writes output to a local `docs/` directory (ignored by git). Open `docs/index.html` in your browser to preview.
 
@@ -55,6 +57,10 @@ description: "One sentence shown on the index page."
 - Cite external references inline. Example: `Rawls, *A Theory of Justice* (1971).`
 - Keep formatting simple: headings, lists, and paragraphs render cleanly. Bold (`**text**`), italics (`*text*`), and inline code (``code``) are supported.
 - When adding new policy proposals, describe implementation steps, risks, and open questions to invite collaboration.
+
+## Updating styles or assets
+
+Shared presentation assets live in `scripts/resources/` (for example `style.css` and `favicon.svg`). Adjust them and rerun the build if you want to propose visual refinements.
 
 ## Proposing structure changes
 
