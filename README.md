@@ -1,5 +1,7 @@
 # The Empowerment Economy
 
+View site: https://demostheneslld.github.io/ai-philosophy-empowerment/
+
 The Empowerment Economy is a community-managed manifesto, philosophy, and policy playbook for the AI age. It documents how universal guarantees, distributed intelligence, and personal agency can replace the collapsing social contract of the 20th century.
 
 The repository stays radically simple: contributors only touch Markdown in `content/`. A GitHub Actions workflow renders everything into minimalist HTML, copies shared assets, and publishes the result with GitHub Pages. No local tooling or manual build steps are required, though an optional script is available if you want to preview changes offline.
